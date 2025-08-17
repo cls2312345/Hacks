@@ -1,13 +1,11 @@
--- // Load Rayfield UI
--- // made by obbi_1801 or fls|antam on discord
-print ("made by obbi_1801 or fls|antam on discord")
-print ("https://github.com/Antam71")
+
+print ("Made By Collin")
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
     Name = "🔥 Admin Panel 🔫",
     LoadingTitle = "🔫 Admin Panel 💥",
-    LoadingSubtitle = "by Antam",
+    LoadingSubtitle = "by Collin",
     ConfigurationSaving = { Enabled = false },
     Discord = { Enabled = false },
     KeySystem = false
@@ -314,4 +312,5 @@ Rayfield:Notify({
     Content = "Fly, Aimlock (hold E), WalkSpeed, and Highlights ready.",
     Duration = 5,
     Image = 13047715178
+
 })
