@@ -1,0 +1,317 @@
+-- // Load Rayfield UI
+-- // made by obbi_1801 or fls|antam on discord
+print ("made by obbi_1801 or fls|antam on discord")
+print ("https://github.com/Antam71")
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "🔥 Admin Panel 🔫",
+    LoadingTitle = "🔫 Admin Panel 💥",
+    LoadingSubtitle = "by Antam",
+    ConfigurationSaving = { Enabled = false },
+    Discord = { Enabled = false },
+    KeySystem = false
+})
+
+-- // Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local camera = workspace.CurrentCamera
+
+-- // Player refs
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local function getHumanoid(c) return (c or character):FindFirstChildOfClass("Humanoid") end
+local function getHRP(c) return (c or character):FindFirstChild("HumanoidRootPart") end
+
+player.CharacterAdded:Connect(function(newChar) character = newChar end)
+
+-- // Tabs
+local CombatTab   = Window:CreateTab("🎯 Combat")
+local MovementTab = Window:CreateTab("⚡ Movement")
+local VisualsTab  = Window:CreateTab("👁 Visuals")
+
+----------------------------------------------------------------------
+-- WalkSpeed (slider + toggle)
+----------------------------------------------------------------------
+local normalSpeed, wsValue, wsEnabled = 16, 100, false
+local function applyWalkSpeed()
+    local hum = getHumanoid()
+    if hum then hum.WalkSpeed = wsEnabled and wsValue or normalSpeed end
+end
+
+MovementTab:CreateSlider({
+    Name = "WalkSpeed",
+    Range = {16, 350},
+    Increment = 1,
+    CurrentValue = wsValue,
+    Callback = function(v)
+        wsValue = v
+        if wsEnabled then applyWalkSpeed() end
+    end
+})
+
+MovementTab:CreateToggle({
+    Name = "Enable WalkSpeed",
+    CurrentValue = false,
+    Callback = function(v)
+        wsEnabled = v
+        applyWalkSpeed()
+    end
+})
+
+player.CharacterAdded:Connect(function()
+    task.wait(0.25)
+    applyWalkSpeed()
+end)
+
+----------------------------------------------------------------------
+-- Fly (toggle + speed slider)
+----------------------------------------------------------------------
+local flyEnabled, flySpeed = false, 100
+local keys = {W=false,A=false,S=false,D=false,Space=false,LeftControl=false}
+local bodyVelocity, bodyGyro, flyConn
+
+UserInputService.InputBegan:Connect(function(i,gp)
+    if gp then return end
+    if i.KeyCode == Enum.KeyCode.W then keys.W = true end
+    if i.KeyCode == Enum.KeyCode.A then keys.A = true end
+    if i.KeyCode == Enum.KeyCode.S then keys.S = true end
+    if i.KeyCode == Enum.KeyCode.D then keys.D = true end
+    if i.KeyCode == Enum.KeyCode.Space then keys.Space = true end
+    if i.KeyCode == Enum.KeyCode.LeftControl then keys.LeftControl = true end
+end)
+UserInputService.InputEnded:Connect(function(i,gp)
+    if gp then return end
+    if i.KeyCode == Enum.KeyCode.W then keys.W = false end
+    if i.KeyCode == Enum.KeyCode.A then keys.A = false end
+    if i.KeyCode == Enum.KeyCode.S then keys.S = false end
+    if i.KeyCode == Enum.KeyCode.D then keys.D = false end
+    if i.KeyCode == Enum.KeyCode.Space then keys.Space = false end
+    if i.KeyCode == Enum.KeyCode.LeftControl then keys.LeftControl = false end
+end)
+
+local function startFlying()
+    if flyEnabled then return end
+    local hrp = getHRP()
+    if not hrp then return end
+    flyEnabled = true
+
+    bodyVelocity = Instance.new("BodyVelocity", hrp)
+    bodyVelocity.MaxForce = Vector3.new(1e6,1e6,1e6)
+    bodyGyro = Instance.new("BodyGyro", hrp)
+    bodyGyro.MaxTorque = Vector3.new(1e6,1e6,1e6)
+
+    flyConn = RunService.RenderStepped:Connect(function()
+        if not flyEnabled then return end
+        local cam = workspace.CurrentCamera
+        local v = Vector3.new()
+        if keys.W then v += cam.CFrame.LookVector end
+        if keys.S then v -= cam.CFrame.LookVector end
+        if keys.A then v -= cam.CFrame.RightVector end
+        if keys.D then v += cam.CFrame.RightVector end
+        if keys.Space then v += Vector3.new(0,1,0) end
+        if keys.LeftControl then v -= Vector3.new(0,1,0) end
+        if v.Magnitude > 0 then v = v.Unit * flySpeed end
+        bodyVelocity.Velocity = v
+        bodyGyro.CFrame = cam.CFrame
+    end)
+end
+
+local function stopFlying()
+    flyEnabled = false
+    if flyConn then flyConn:Disconnect() flyConn=nil end
+    if bodyVelocity then bodyVelocity:Destroy() bodyVelocity=nil end
+    if bodyGyro then bodyGyro:Destroy() bodyGyro=nil end
+end
+
+MovementTab:CreateToggle({
+    Name = "Enable Fly",
+    CurrentValue = false,
+    Callback = function(v)
+        if v then startFlying() else stopFlying() end
+    end
+})
+
+MovementTab:CreateSlider({
+    Name = "Fly Speed",
+    Range = {10, 300},
+    Increment = 5,
+    CurrentValue = flySpeed,
+    Callback = function(v) flySpeed = v end
+})
+
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    stopFlying()
+end)
+
+----------------------------------------------------------------------
+-- Aimlock (hold E)
+----------------------------------------------------------------------
+local aimEnabled, eHeld, fovRadius = false, false, 100
+local lockedTarget
+
+-- circles
+local okCircle, aimCircle = pcall(function() return Drawing.new("Circle") end)
+local okLock, lockIndicator = pcall(function() return Drawing.new("Circle") end)
+if okCircle then
+    aimCircle.Color, aimCircle.Thickness, aimCircle.Filled = Color3.new(1,1,1), 2, false
+    aimCircle.Radius, aimCircle.Visible = fovRadius, false
+end
+if okLock then
+    lockIndicator.Color, lockIndicator.Thickness, lockIndicator.Filled = Color3.new(1,0,0), 2, false
+    lockIndicator.Radius, lockIndicator.Visible = 20, false
+end
+
+UserInputService.InputBegan:Connect(function(i,gp)
+    if gp then return end
+    if i.KeyCode == Enum.KeyCode.E then eHeld = true end
+end)
+UserInputService.InputEnded:Connect(function(i,gp)
+    if gp then return end
+    if i.KeyCode == Enum.KeyCode.E then
+        eHeld = false
+        lockedTarget = nil
+        if okLock then lockIndicator.Visible=false end
+    end
+end)
+
+local function worldToScreen(pos)
+    local sp,on = camera:WorldToViewportPoint(pos)
+    return Vector2.new(sp.X,sp.Y), on
+end
+local function selectTarget()
+    local center = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
+    local best, dist = nil, math.huge
+    for _,plr in ipairs(Players:GetPlayers()) do
+        if plr~=player and plr.Character and plr.Character:FindFirstChild("Head") then
+            local head = plr.Character.Head
+            local p,on = worldToScreen(head.Position)
+            if on then
+                local d = (p-center).Magnitude
+                if d<=fovRadius and d<dist then best,dist=plr,d end
+            end
+        end
+    end
+    return best
+end
+
+RunService.RenderStepped:Connect(function()
+    if okCircle then
+        aimCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
+        aimCircle.Radius = fovRadius
+        aimCircle.Visible = aimEnabled
+    end
+    if not (aimEnabled and eHeld) then
+        if okLock then lockIndicator.Visible=false end
+        return
+    end
+    lockedTarget = selectTarget()
+    if lockedTarget and lockedTarget.Character and lockedTarget.Character:FindFirstChild("Head") then
+        local head = lockedTarget.Character.Head
+        local p,on = worldToScreen(head.Position)
+        if on and okLock then
+            lockIndicator.Position = p
+            lockIndicator.Visible = true
+        end
+        camera.CFrame = CFrame.new(camera.CFrame.Position, head.Position)
+    else
+        if okLock then lockIndicator.Visible=false end
+    end
+end)
+
+CombatTab:CreateToggle({
+    Name = "Enable Aimlock (Hold E)",
+    CurrentValue = false,
+    Callback = function(v)
+        aimEnabled = v
+        if okCircle then aimCircle.Visible=v end
+        if not v and okLock then lockIndicator.Visible=false end
+    end
+})
+CombatTab:CreateSlider({
+    Name = "Aimlock FOV",
+    Range = {20, 400},
+    Increment = 5,
+    CurrentValue = fovRadius,
+    Callback = function(v) fovRadius=v end
+})
+
+----------------------------------------------------------------------
+-- Player Highlight
+----------------------------------------------------------------------
+local highlightEnabled = false
+local highlightColor = Color3.fromRGB(255,0,0)
+
+local function applyHighlightToCharacter(char)
+    if not highlightEnabled then
+        local existing = char:FindFirstChild("PlayerHighlight")
+        if existing then existing:Destroy() end
+        return
+    end
+    if char and not char:FindFirstChild("PlayerHighlight") then
+        local hl = Instance.new("Highlight")
+        hl.Name = "PlayerHighlight"
+        hl.Adornee = char
+        hl.FillColor = highlightColor
+        hl.OutlineColor = highlightColor
+        hl.FillTransparency = 0.5
+        hl.Parent = char
+    elseif char:FindFirstChild("PlayerHighlight") then
+        local hl = char:FindFirstChild("PlayerHighlight")
+        hl.FillColor = highlightColor
+        hl.OutlineColor = highlightColor
+    end
+end
+
+local function updateHighlights()
+    for _,plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            applyHighlightToCharacter(plr.Character)
+        end
+    end
+end
+
+-- Toggle in Visuals tab
+VisualsTab:CreateToggle({
+    Name = "Highlight Players",
+    CurrentValue = false,
+    Callback = function(v)
+        highlightEnabled = v
+        updateHighlights()
+    end
+})
+
+-- Color picker in Visuals tab
+VisualsTab:CreateColorPicker({
+    Name = "Highlight Color",
+    Color = highlightColor,
+    Callback = function(c)
+        highlightColor = c
+        updateHighlights()
+    end
+})
+
+-- Keep highlights updated
+Players.PlayerAdded:Connect(function(plr)
+    if plr ~= player then
+        plr.CharacterAdded:Connect(function(char)
+            task.wait(0.25)
+            updateHighlights()
+        end)
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if highlightEnabled then updateHighlights() end
+end)
+
+----------------------------------------------------------------------
+Rayfield:Notify({
+    Title = "Loaded",
+    Content = "Fly, Aimlock (hold E), WalkSpeed, and Highlights ready.",
+    Duration = 5,
+    Image = 13047715178
+})
